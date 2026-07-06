@@ -113,6 +113,13 @@ import {
   importFromBackend,
   isCollaborationLink,
 } from "./data";
+import {
+  captureScene,
+  createServerPage,
+  getServerPage,
+  listServerPages,
+  saveServerPage,
+} from "./data/pagesApi";
 
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
@@ -679,6 +686,10 @@ const ExcalidrawWrapper = () => {
     appState: AppState,
     files: BinaryFiles,
   ) => {
+    if (serverSaveState === "saved") {
+      setServerSaveState("idle");
+    }
+
     if (collabAPI?.isCollaborating()) {
       collabAPI.syncElements(elements);
     }
@@ -729,6 +740,137 @@ const ExcalidrawWrapper = () => {
   const [latestShareableLink, setLatestShareableLink] = useState<string | null>(
     null,
   );
+  const [serverPageId, setServerPageId] = useState<string | null>(null);
+  const [serverPageTitle, setServerPageTitle] = useState("Untitled Page");
+  const [serverSaveState, setServerSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+
+  const loadServerPage = useCallback(
+    async (pageId: string) => {
+      if (!excalidrawAPI) {
+        return;
+      }
+
+      const page = await getServerPage(pageId);
+      const scene = page.scene_json;
+      setServerPageId(page.id);
+      setServerPageTitle(page.title);
+
+      excalidrawAPI.updateScene({
+        elements: restoreElements(scene?.elements ?? [], null, {
+          repairBindings: true,
+          deleteInvisibleElements: true,
+        }),
+        appState: restoreAppState(scene?.appState ?? {}, null),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      if (scene?.files) {
+        excalidrawAPI.addFiles(Object.values(scene.files));
+      }
+      excalidrawAPI.setToast({ message: `Loaded page: ${page.title}` });
+    },
+    [excalidrawAPI],
+  );
+
+  const onSaveServerPage = useCallback(async () => {
+    if (!excalidrawAPI) {
+      return;
+    }
+
+    try {
+      setServerSaveState("saving");
+      let pageId = serverPageId;
+      let pageTitle = serverPageTitle;
+      if (!pageId) {
+        const created = await createServerPage(serverPageTitle);
+        pageId = created.id;
+        pageTitle = created.title;
+        setServerPageId(created.id);
+        setServerPageTitle(created.title);
+      }
+
+      await saveServerPage({
+        id: pageId,
+        title: pageTitle,
+        scene: captureScene(excalidrawAPI),
+      });
+      setServerSaveState("saved");
+      excalidrawAPI.setToast({ message: "Saved to server" });
+    } catch (error) {
+      console.error(error);
+      setServerSaveState("error");
+      excalidrawAPI.setToast({ message: "Save failed" });
+    }
+  }, [excalidrawAPI, serverPageId, serverPageTitle]);
+
+  const onCreateServerPage = useCallback(async () => {
+    if (!excalidrawAPI) {
+      return;
+    }
+
+    const title =
+      window.prompt("New page title", `Page ${new Date().toLocaleString()}`) ||
+      "";
+    if (!title.trim()) {
+      return;
+    }
+
+    try {
+      const page = await createServerPage(title.trim());
+      setServerPageId(page.id);
+      setServerPageTitle(page.title);
+      setServerSaveState("idle");
+
+      excalidrawAPI.updateScene({
+        elements: [],
+        appState: restoreAppState(
+          { ...getDefaultAppState(), name: page.title },
+          excalidrawAPI.getAppState(),
+        ),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      excalidrawAPI.setToast({ message: `Created page: ${page.title}` });
+    } catch (error) {
+      console.error(error);
+      setServerSaveState("error");
+      excalidrawAPI.setToast({ message: "Page creation failed" });
+    }
+  }, [excalidrawAPI]);
+
+  const onOpenServerPage = useCallback(async () => {
+    try {
+      const pages = await listServerPages();
+      if (!pages.length) {
+        excalidrawAPI?.setToast({ message: "No saved pages yet" });
+        return;
+      }
+
+      const options = pages
+        .map((page, index) => `${index + 1}. ${page.title} (${page.id})`)
+        .join("\n");
+      const selected = window.prompt(
+        `Select a page number to open:\n\n${options}`,
+        "1",
+      );
+      if (!selected) {
+        return;
+      }
+
+      const index = Number.parseInt(selected, 10) - 1;
+      if (!Number.isFinite(index) || index < 0 || index >= pages.length) {
+        excalidrawAPI?.setToast({ message: "Invalid selection" });
+        return;
+      }
+
+      await loadServerPage(pages[index].id);
+      setServerSaveState("idle");
+    } catch (error) {
+      console.error(error);
+      setServerSaveState("error");
+      excalidrawAPI?.setToast({ message: "Failed to open pages" });
+    }
+  }, [excalidrawAPI, loadServerPage]);
 
   const onExportToBackend = async (
     exportedElements: readonly NonDeletedExcalidrawElement[],
@@ -1018,7 +1160,18 @@ const ExcalidrawWrapper = () => {
             </OverwriteConfirmDialog.Action>
           )}
         </OverwriteConfirmDialog>
-        <AppFooter onChange={() => excalidrawAPI?.refresh()} />
+        <AppFooter
+          onChange={() => excalidrawAPI?.refresh()}
+          onSavePage={onSaveServerPage}
+          onNewPage={onCreateServerPage}
+          onOpenPage={onOpenServerPage}
+          pageLabel={
+            serverPageId
+              ? `Page: ${serverPageTitle}`
+              : "Page: Not saved to server"
+          }
+          saveState={serverSaveState}
+        />
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />
