@@ -92,5 +92,8 @@
   },
   "resolutions": {
     "strip-ansi": "6.0.1"
+  },
+  "dependencies": {
+    "pg": "8.22.0"
   }
 }
