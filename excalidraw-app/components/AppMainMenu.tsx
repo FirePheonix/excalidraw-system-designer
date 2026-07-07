@@ -18,6 +18,8 @@ import { saveDebugState } from "./DebugCanvas";
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
   onSavePage: () => void;
+  onRenamePage: () => void;
+  onDeletePage: () => void;
   onNewPage: () => void;
   onOpenPage: () => void;
   pageLabel: string;
@@ -40,6 +42,8 @@ export const AppMainMenu: React.FC<{
       >
         {props.saveState === "saving" ? "Saving..." : "Save Server Page"}
       </MainMenu.Item>
+      <MainMenu.Item onSelect={props.onRenamePage}>Rename Server Page</MainMenu.Item>
+      <MainMenu.Item onSelect={props.onDeletePage}>Delete Server Page</MainMenu.Item>
       <MainMenu.ItemCustom>
         <div style={{ opacity: 0.7, fontSize: ".875rem", padding: "0 .5rem" }}>
           {props.pageLabel}

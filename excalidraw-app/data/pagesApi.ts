@@ -69,12 +69,23 @@ export const saveServerPage = async (params: {
   return json.page;
 };
 
+export const deleteServerPage = async (id: string) => {
+  const response = await fetch(`/api/pages/${id}`, {
+    method: "DELETE",
+  });
+  await assertResponse(response);
+};
+
 export const captureScene = (
   excalidrawAPI: ExcalidrawImperativeAPI,
 ): StoredScene => {
+  // collaborators is a Map and cannot be safely round-tripped through JSON.
+  const { collaborators: _collaborators, ...serializableAppState } =
+    excalidrawAPI.getAppState();
+
   return {
     elements: excalidrawAPI.getSceneElementsIncludingDeleted(),
-    appState: excalidrawAPI.getAppState(),
+    appState: serializableAppState,
     files: excalidrawAPI.getFiles(),
   };
 };

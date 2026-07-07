@@ -116,6 +116,7 @@ import {
 import {
   captureScene,
   createServerPage,
+  deleteServerPage,
   getServerPage,
   listServerPages,
   saveServerPage,
@@ -778,13 +779,17 @@ const ExcalidrawWrapper = () => {
       const scene = page.scene_json;
       setServerPageId(page.id);
       setServerPageTitle(page.title);
+      const normalizedAppState = {
+        ...(scene?.appState ?? {}),
+        collaborators: new Map(),
+      };
 
       excalidrawAPI.updateScene({
         elements: restoreElements(scene?.elements ?? [], null, {
           repairBindings: true,
           deleteInvisibleElements: true,
         }),
-        appState: restoreAppState(scene?.appState ?? {}, null),
+        appState: restoreAppState(normalizedAppState, null),
         captureUpdate: CaptureUpdateAction.IMMEDIATELY,
       });
       if (scene?.files) {
@@ -895,6 +900,70 @@ const ExcalidrawWrapper = () => {
       excalidrawAPI.setToast({ message: "Page creation failed" });
     }
   }, [excalidrawAPI, refreshServerPages, serverPages.length]);
+
+  const onRenameServerPage = useCallback(async () => {
+    if (!excalidrawAPI || !serverPageId) {
+      excalidrawAPI?.setToast({ message: "No server page selected" });
+      return;
+    }
+
+    const nextTitle = window.prompt("Rename server page", serverPageTitle);
+    if (!nextTitle || !nextTitle.trim()) {
+      return;
+    }
+
+    try {
+      setServerSaveState("saving");
+      await saveServerPage({
+        id: serverPageId,
+        title: nextTitle.trim(),
+        scene: captureScene(excalidrawAPI),
+      });
+      setServerPageTitle(nextTitle.trim());
+      await refreshServerPages();
+      setServerSaveState("saved");
+      excalidrawAPI.setToast({ message: "Page renamed" });
+    } catch (error) {
+      console.error(error);
+      setServerSaveState("error");
+      excalidrawAPI.setToast({ message: "Rename failed" });
+    }
+  }, [excalidrawAPI, refreshServerPages, serverPageId, serverPageTitle]);
+
+  const onDeleteServerPage = useCallback(async () => {
+    if (!excalidrawAPI || !serverPageId) {
+      excalidrawAPI?.setToast({ message: "No server page selected" });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete server page "${serverPageTitle}"? This cannot be undone.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await deleteServerPage(serverPageId);
+      setServerPageId(null);
+      setServerPageTitle("Untitled Page");
+      setServerSaveState("idle");
+      await refreshServerPages();
+      excalidrawAPI.updateScene({
+        elements: [],
+        appState: restoreAppState(
+          { ...getDefaultAppState(), name: "Untitled Page" },
+          excalidrawAPI.getAppState(),
+        ),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
+      excalidrawAPI.setToast({ message: "Page deleted" });
+    } catch (error) {
+      console.error(error);
+      setServerSaveState("error");
+      excalidrawAPI.setToast({ message: "Delete failed" });
+    }
+  }, [excalidrawAPI, refreshServerPages, serverPageId, serverPageTitle]);
 
   const onOpenServerPage = useCallback(async () => {
     try {
@@ -1230,6 +1299,8 @@ const ExcalidrawWrapper = () => {
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
           onSavePage={onSaveServerPage}
+          onRenamePage={onRenameServerPage}
+          onDeletePage={onDeleteServerPage}
           onNewPage={onCreateServerPage}
           onOpenPage={onOpenServerPage}
           pageLabel={
