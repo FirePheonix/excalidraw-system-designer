@@ -796,37 +796,76 @@ const ExcalidrawWrapper = () => {
     [excalidrawAPI, refreshServerPages],
   );
 
-  const onSaveServerPage = useCallback(async () => {
+  const onSaveServerPage = useCallback(
+    async (options?: { silent?: boolean; createIfMissing?: boolean }) => {
+      const silent = options?.silent ?? false;
+      const createIfMissing = options?.createIfMissing ?? true;
+
+      if (!excalidrawAPI) {
+        return;
+      }
+
+      try {
+        setServerSaveState("saving");
+        let pageId = serverPageId;
+        let pageTitle = serverPageTitle;
+        if (!pageId) {
+          if (!createIfMissing) {
+            setServerSaveState("idle");
+            return;
+          }
+          const created = await createServerPage(serverPageTitle);
+          pageId = created.id;
+          pageTitle = created.title;
+          setServerPageId(created.id);
+          setServerPageTitle(created.title);
+        }
+
+        await saveServerPage({
+          id: pageId,
+          title: pageTitle,
+          scene: captureScene(excalidrawAPI),
+        });
+        await refreshServerPages();
+        setServerSaveState("saved");
+        if (!silent) {
+          excalidrawAPI.setToast({ message: "Saved to server" });
+        }
+      } catch (error) {
+        console.error(error);
+        setServerSaveState("error");
+        if (!silent) {
+          excalidrawAPI.setToast({ message: "Save failed" });
+        }
+      }
+    },
+    [excalidrawAPI, refreshServerPages, serverPageId, serverPageTitle],
+  );
+
+  useEffect(() => {
     if (!excalidrawAPI) {
       return;
     }
 
-    try {
-      setServerSaveState("saving");
-      let pageId = serverPageId;
-      let pageTitle = serverPageTitle;
-      if (!pageId) {
-        const created = await createServerPage(serverPageTitle);
-        pageId = created.id;
-        pageTitle = created.title;
-        setServerPageId(created.id);
-        setServerPageTitle(created.title);
+    const autosaveInterval = window.setInterval(() => {
+      if (serverSaveState === "saving") {
+        return;
       }
 
-      await saveServerPage({
-        id: pageId,
-        title: pageTitle,
-        scene: captureScene(excalidrawAPI),
-      });
-      await refreshServerPages();
-      setServerSaveState("saved");
-      excalidrawAPI.setToast({ message: "Saved to server" });
-    } catch (error) {
-      console.error(error);
-      setServerSaveState("error");
-      excalidrawAPI.setToast({ message: "Save failed" });
-    }
-  }, [excalidrawAPI, refreshServerPages, serverPageId, serverPageTitle]);
+      const hasContent =
+        excalidrawAPI.getSceneElements().length > 0 ||
+        Object.keys(excalidrawAPI.getFiles()).length > 0;
+      if (!hasContent) {
+        return;
+      }
+
+      void onSaveServerPage({ silent: true, createIfMissing: true });
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(autosaveInterval);
+    };
+  }, [excalidrawAPI, onSaveServerPage, serverSaveState]);
 
   const onCreateServerPage = useCallback(async () => {
     if (!excalidrawAPI) {
@@ -865,7 +904,32 @@ const ExcalidrawWrapper = () => {
         excalidrawAPI?.setToast({ message: "No saved pages yet" });
         return;
       }
-      await loadServerPage(pages[0].id);
+
+      const pageOptions = pages
+        .slice(0, 20)
+        .map((page, index) => `${index + 1}. ${page.title}`)
+        .join("\n");
+      const selected = window.prompt(
+        `Open which server page? Enter a number:\n\n${pageOptions}`,
+        "1",
+      );
+      if (selected === null) {
+        return;
+      }
+
+      const selectedIndex = Number.parseInt(selected, 10) - 1;
+      if (Number.isNaN(selectedIndex) || selectedIndex < 0) {
+        excalidrawAPI?.setToast({ message: "Invalid page selection" });
+        return;
+      }
+
+      const pageToOpen = pages[selectedIndex];
+      if (!pageToOpen) {
+        excalidrawAPI?.setToast({ message: "Page selection out of range" });
+        return;
+      }
+
+      await loadServerPage(pageToOpen.id);
       setServerSaveState("idle");
     } catch (error) {
       console.error(error);
@@ -1204,6 +1268,26 @@ const ExcalidrawWrapper = () => {
           )}
         </OverwriteConfirmDialog>
         <AppFooter onChange={() => excalidrawAPI?.refresh()} />
+        <div className="server-save-fab">
+          <button
+            type="button"
+            className="server-save-fab__button"
+            onClick={() => void onSaveServerPage()}
+            disabled={serverSaveState === "saving"}
+            title="Save current canvas to server"
+          >
+            {serverSaveState === "saving" ? "Saving..." : "Save"}
+          </button>
+          <div className="server-save-fab__status">
+            {serverSaveState === "saved"
+              ? "Saved"
+              : serverSaveState === "error"
+                ? "Save failed"
+                : serverPageId
+                  ? `Page: ${serverPageTitle}`
+                  : "Not saved"}
+          </div>
+        </div>
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />
