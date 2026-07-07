@@ -8,7 +8,32 @@ import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
 import "./AppSidebar.scss";
+
 import type { ServerPageSummary } from "../data/pagesApi";
+
+const formatPageUpdatedLabel = (updatedAt: string) => {
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) {
+    return "Updated recently";
+  }
+
+  const now = Date.now();
+  const diffMs = now - date.getTime();
+  const dayMs = 1000 * 60 * 60 * 24;
+  const diffDays = Math.floor(diffMs / dayMs);
+
+  if (diffDays <= 0) {
+    return "Updated today";
+  }
+  if (diffDays === 1) {
+    return "Updated yesterday";
+  }
+  if (diffDays < 7) {
+    return `Updated ${diffDays}d ago`;
+  }
+
+  return `Updated ${date.toLocaleDateString()}`;
+};
 
 export const AppSidebar = ({
   pages,
@@ -52,25 +77,33 @@ export const AppSidebar = ({
         </Sidebar.TabTrigger>
       </DefaultSidebar.TabTriggers>
       <Sidebar.Tab tab="pages" className="px-2">
-        <div className="app-sidebar-pages-header">
-          <button
-            type="button"
-            className="app-sidebar-pages-new"
-            onClick={onCreatePage}
-          >
-            {PlusIcon}
-            New page
-          </button>
-          <button
-            type="button"
-            className="app-sidebar-pages-new"
-            onClick={onInstallSystemLibraries}
-            disabled={isInstallingSystemLibraries}
-          >
-            {isInstallingSystemLibraries
-              ? "Installing..."
-              : "Install System Libraries"}
-          </button>
+        <div className="app-sidebar-pages-shell">
+          <div className="app-sidebar-pages-header">
+            <div className="app-sidebar-pages-title-wrap">
+              <h3 className="app-sidebar-pages-title">Pages</h3>
+              <p className="app-sidebar-pages-subtitle">
+                Switch between saved canvases quickly
+              </p>
+            </div>
+            <button
+              type="button"
+              className="app-sidebar-pages-new app-sidebar-pages-new--primary"
+              onClick={onCreatePage}
+            >
+              {PlusIcon}
+              New page
+            </button>
+            <button
+              type="button"
+              className="app-sidebar-pages-new app-sidebar-pages-new--ghost"
+              onClick={onInstallSystemLibraries}
+              disabled={isInstallingSystemLibraries}
+            >
+              {isInstallingSystemLibraries
+                ? "Installing libraries..."
+                : "Install system libraries"}
+            </button>
+          </div>
         </div>
         <div className="app-sidebar-pages-list">
           {isLoadingPages && (
@@ -91,7 +124,12 @@ export const AppSidebar = ({
                 onClick={() => onSelectPage(page.id)}
                 title={page.title}
               >
-                <span>{page.title || "Untitled Page"}</span>
+                <span className="app-sidebar-page-item__title">
+                  {page.title || "Untitled page"}
+                </span>
+                <span className="app-sidebar-page-item__meta">
+                  {formatPageUpdatedLabel(page.updated_at)}
+                </span>
               </button>
             ))}
         </div>
