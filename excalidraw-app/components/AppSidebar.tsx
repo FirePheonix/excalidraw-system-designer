@@ -16,12 +16,16 @@ export const AppSidebar = ({
   isLoadingPages,
   onCreatePage,
   onSelectPage,
+  onInstallSystemLibraries,
+  isInstallingSystemLibraries,
 }: {
   pages: ServerPageSummary[];
   currentPageId: string | null;
   isLoadingPages: boolean;
   onCreatePage: () => void;
   onSelectPage: (pageId: string) => void;
+  onInstallSystemLibraries: () => void;
+  isInstallingSystemLibraries: boolean;
 }) => {
   const { theme, openSidebar } = useUIAppState();
 
@@ -56,6 +60,16 @@ export const AppSidebar = ({
           >
             {PlusIcon}
             New page
+          </button>
+          <button
+            type="button"
+            className="app-sidebar-pages-new"
+            onClick={onInstallSystemLibraries}
+            disabled={isInstallingSystemLibraries}
+          >
+            {isInstallingSystemLibraries
+              ? "Installing..."
+              : "Install System Libraries"}
           </button>
         </div>
         <div className="app-sidebar-pages-list">

@@ -120,6 +120,10 @@ import {
   listServerPages,
   saveServerPage,
 } from "./data/pagesApi";
+import {
+  hasInstalledCuratedSystemLibraries,
+  installCuratedSystemLibraries,
+} from "./data/systemLibraries";
 
 import { updateStaleImageStatuses } from "./data/FileManager";
 import { FileStatusStore } from "./data/fileStatusStore";
@@ -748,6 +752,8 @@ const ExcalidrawWrapper = () => {
   >("idle");
   const [serverPages, setServerPages] = useState<ServerPageSummary[]>([]);
   const [isLoadingServerPages, setIsLoadingServerPages] = useState(false);
+  const [isInstallingSystemLibraries, setIsInstallingSystemLibraries] =
+    useState(false);
 
   const refreshServerPages = useCallback(async () => {
     try {
@@ -871,6 +877,34 @@ const ExcalidrawWrapper = () => {
   useEffect(() => {
     refreshServerPages();
   }, [refreshServerPages]);
+
+  const onInstallSystemLibraries = useCallback(async () => {
+    if (!excalidrawAPI || isInstallingSystemLibraries) {
+      return;
+    }
+
+    try {
+      setIsInstallingSystemLibraries(true);
+      const count = await installCuratedSystemLibraries(excalidrawAPI);
+      excalidrawAPI.setToast({
+        message: `Installed ${count} system-design library items`,
+      });
+    } catch (error) {
+      console.error(error);
+      excalidrawAPI.setToast({
+        message: "Failed to install system-design libraries",
+      });
+    } finally {
+      setIsInstallingSystemLibraries(false);
+    }
+  }, [excalidrawAPI, isInstallingSystemLibraries]);
+
+  useEffect(() => {
+    if (!excalidrawAPI || hasInstalledCuratedSystemLibraries()) {
+      return;
+    }
+    onInstallSystemLibraries();
+  }, [excalidrawAPI, onInstallSystemLibraries]);
 
   const onExportToBackend = async (
     exportedElements: readonly NonDeletedExcalidrawElement[],
@@ -1217,6 +1251,8 @@ const ExcalidrawWrapper = () => {
           isLoadingPages={isLoadingServerPages}
           onCreatePage={onCreateServerPage}
           onSelectPage={loadServerPage}
+          onInstallSystemLibraries={onInstallSystemLibraries}
+          isInstallingSystemLibraries={isInstallingSystemLibraries}
         />
 
         {errorMessage && (
