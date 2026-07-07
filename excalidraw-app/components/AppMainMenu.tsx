@@ -17,6 +17,11 @@ import { saveDebugState } from "./DebugCanvas";
 
 export const AppMainMenu: React.FC<{
   onCollabDialogOpen: () => any;
+  onSavePage: () => void;
+  onNewPage: () => void;
+  onOpenPage: () => void;
+  pageLabel: string;
+  saveState: "idle" | "saving" | "saved" | "error";
   isCollaborating: boolean;
   isCollabEnabled: boolean;
   theme: Theme | "system";
@@ -26,6 +31,21 @@ export const AppMainMenu: React.FC<{
     <MainMenu>
       <MainMenu.DefaultItems.LoadScene />
       <MainMenu.DefaultItems.SaveToActiveFile />
+      <MainMenu.Separator />
+      <MainMenu.Item onSelect={props.onNewPage}>New Server Page</MainMenu.Item>
+      <MainMenu.Item onSelect={props.onOpenPage}>Browse Server Pages</MainMenu.Item>
+      <MainMenu.Item
+        onSelect={props.onSavePage}
+        disabled={props.saveState === "saving"}
+      >
+        {props.saveState === "saving" ? "Saving..." : "Save Server Page"}
+      </MainMenu.Item>
+      <MainMenu.ItemCustom>
+        <div style={{ opacity: 0.7, fontSize: ".875rem", padding: "0 .5rem" }}>
+          {props.pageLabel}
+        </div>
+      </MainMenu.ItemCustom>
+      <MainMenu.Separator />
       <MainMenu.DefaultItems.Export />
       <MainMenu.DefaultItems.SaveAsImage />
       {props.isCollabEnabled && (

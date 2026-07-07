@@ -1,5 +1,6 @@
 import { DefaultSidebar, Sidebar, THEME } from "@excalidraw/excalidraw";
 import {
+  PlusIcon,
   messageCircleIcon,
   presentationIcon,
 } from "@excalidraw/excalidraw/components/icons";
@@ -7,13 +8,32 @@ import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
 
 import "./AppSidebar.scss";
+import type { ServerPageSummary } from "../data/pagesApi";
 
-export const AppSidebar = () => {
+export const AppSidebar = ({
+  pages,
+  currentPageId,
+  isLoadingPages,
+  onCreatePage,
+  onSelectPage,
+}: {
+  pages: ServerPageSummary[];
+  currentPageId: string | null;
+  isLoadingPages: boolean;
+  onCreatePage: () => void;
+  onSelectPage: (pageId: string) => void;
+}) => {
   const { theme, openSidebar } = useUIAppState();
 
   return (
     <DefaultSidebar>
       <DefaultSidebar.TabTriggers>
+        <Sidebar.TabTrigger
+          tab="pages"
+          style={{ opacity: openSidebar?.tab === "pages" ? 1 : 0.4 }}
+        >
+          {messageCircleIcon}
+        </Sidebar.TabTrigger>
         <Sidebar.TabTrigger
           tab="comments"
           style={{ opacity: openSidebar?.tab === "comments" ? 1 : 0.4 }}
@@ -27,6 +47,41 @@ export const AppSidebar = () => {
           {presentationIcon}
         </Sidebar.TabTrigger>
       </DefaultSidebar.TabTriggers>
+      <Sidebar.Tab tab="pages" className="px-2">
+        <div className="app-sidebar-pages-header">
+          <button
+            type="button"
+            className="app-sidebar-pages-new"
+            onClick={onCreatePage}
+          >
+            {PlusIcon}
+            New page
+          </button>
+        </div>
+        <div className="app-sidebar-pages-list">
+          {isLoadingPages && (
+            <div className="app-sidebar-pages-empty">Loading pages...</div>
+          )}
+          {!isLoadingPages && pages.length === 0 && (
+            <div className="app-sidebar-pages-empty">
+              No pages yet. Create your first page.
+            </div>
+          )}
+          {!isLoadingPages &&
+            pages.map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                className="app-sidebar-page-item"
+                data-active={currentPageId === page.id ? "true" : "false"}
+                onClick={() => onSelectPage(page.id)}
+                title={page.title}
+              >
+                <span>{page.title || "Untitled Page"}</span>
+              </button>
+            ))}
+        </div>
+      </Sidebar.Tab>
       <Sidebar.Tab tab="comments">
         <div className="app-sidebar-promo-container">
           <div

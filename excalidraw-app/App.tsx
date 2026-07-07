@@ -155,6 +155,7 @@ import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanne
 import { AppSidebar } from "./components/AppSidebar";
 
 import type { CollabAPI } from "./collab/Collab";
+import type { ServerPageSummary } from "./data/pagesApi";
 
 polyfill();
 
@@ -745,6 +746,21 @@ const ExcalidrawWrapper = () => {
   const [serverSaveState, setServerSaveState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
+  const [serverPages, setServerPages] = useState<ServerPageSummary[]>([]);
+  const [isLoadingServerPages, setIsLoadingServerPages] = useState(false);
+
+  const refreshServerPages = useCallback(async () => {
+    try {
+      setIsLoadingServerPages(true);
+      const pages = await listServerPages(200);
+      setServerPages(pages);
+    } catch (error) {
+      console.error(error);
+      excalidrawAPI?.setToast({ message: "Failed to load page list" });
+    } finally {
+      setIsLoadingServerPages(false);
+    }
+  }, [excalidrawAPI]);
 
   const loadServerPage = useCallback(
     async (pageId: string) => {
@@ -769,8 +785,9 @@ const ExcalidrawWrapper = () => {
         excalidrawAPI.addFiles(Object.values(scene.files));
       }
       excalidrawAPI.setToast({ message: `Loaded page: ${page.title}` });
+      await refreshServerPages();
     },
-    [excalidrawAPI],
+    [excalidrawAPI, refreshServerPages],
   );
 
   const onSaveServerPage = useCallback(async () => {
@@ -795,6 +812,7 @@ const ExcalidrawWrapper = () => {
         title: pageTitle,
         scene: captureScene(excalidrawAPI),
       });
+      await refreshServerPages();
       setServerSaveState("saved");
       excalidrawAPI.setToast({ message: "Saved to server" });
     } catch (error) {
@@ -802,25 +820,20 @@ const ExcalidrawWrapper = () => {
       setServerSaveState("error");
       excalidrawAPI.setToast({ message: "Save failed" });
     }
-  }, [excalidrawAPI, serverPageId, serverPageTitle]);
+  }, [excalidrawAPI, refreshServerPages, serverPageId, serverPageTitle]);
 
   const onCreateServerPage = useCallback(async () => {
     if (!excalidrawAPI) {
       return;
     }
 
-    const title =
-      window.prompt("New page title", `Page ${new Date().toLocaleString()}`) ||
-      "";
-    if (!title.trim()) {
-      return;
-    }
-
     try {
-      const page = await createServerPage(title.trim());
+      const title = `Untitled ${serverPages.length + 1}`;
+      const page = await createServerPage(title);
       setServerPageId(page.id);
       setServerPageTitle(page.title);
       setServerSaveState("idle");
+      await refreshServerPages();
 
       excalidrawAPI.updateScene({
         elements: [],
@@ -836,34 +849,17 @@ const ExcalidrawWrapper = () => {
       setServerSaveState("error");
       excalidrawAPI.setToast({ message: "Page creation failed" });
     }
-  }, [excalidrawAPI]);
+  }, [excalidrawAPI, refreshServerPages, serverPages.length]);
 
   const onOpenServerPage = useCallback(async () => {
     try {
-      const pages = await listServerPages();
+      const pages = await listServerPages(200);
+      setServerPages(pages);
       if (!pages.length) {
         excalidrawAPI?.setToast({ message: "No saved pages yet" });
         return;
       }
-
-      const options = pages
-        .map((page, index) => `${index + 1}. ${page.title} (${page.id})`)
-        .join("\n");
-      const selected = window.prompt(
-        `Select a page number to open:\n\n${options}`,
-        "1",
-      );
-      if (!selected) {
-        return;
-      }
-
-      const index = Number.parseInt(selected, 10) - 1;
-      if (!Number.isFinite(index) || index < 0 || index >= pages.length) {
-        excalidrawAPI?.setToast({ message: "Invalid selection" });
-        return;
-      }
-
-      await loadServerPage(pages[index].id);
+      await loadServerPage(pages[0].id);
       setServerSaveState("idle");
     } catch (error) {
       console.error(error);
@@ -871,6 +867,10 @@ const ExcalidrawWrapper = () => {
       excalidrawAPI?.setToast({ message: "Failed to open pages" });
     }
   }, [excalidrawAPI, loadServerPage]);
+
+  useEffect(() => {
+    refreshServerPages();
+  }, [refreshServerPages]);
 
   const onExportToBackend = async (
     exportedElements: readonly NonDeletedExcalidrawElement[],
@@ -1131,6 +1131,15 @@ const ExcalidrawWrapper = () => {
       >
         <AppMainMenu
           onCollabDialogOpen={onCollabDialogOpen}
+          onSavePage={onSaveServerPage}
+          onNewPage={onCreateServerPage}
+          onOpenPage={onOpenServerPage}
+          pageLabel={
+            serverPageId
+              ? `Server page: ${serverPageTitle}`
+              : "Server page: Not saved"
+          }
+          saveState={serverSaveState}
           isCollaborating={isCollaborating}
           isCollabEnabled={!isCollabDisabled}
           theme={appTheme}
@@ -1160,18 +1169,7 @@ const ExcalidrawWrapper = () => {
             </OverwriteConfirmDialog.Action>
           )}
         </OverwriteConfirmDialog>
-        <AppFooter
-          onChange={() => excalidrawAPI?.refresh()}
-          onSavePage={onSaveServerPage}
-          onNewPage={onCreateServerPage}
-          onOpenPage={onOpenServerPage}
-          pageLabel={
-            serverPageId
-              ? `Page: ${serverPageTitle}`
-              : "Page: Not saved to server"
-          }
-          saveState={serverSaveState}
-        />
+        <AppFooter onChange={() => excalidrawAPI?.refresh()} />
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />
@@ -1213,7 +1211,13 @@ const ExcalidrawWrapper = () => {
           }}
         />
 
-        <AppSidebar />
+        <AppSidebar
+          pages={serverPages}
+          currentPageId={serverPageId}
+          isLoadingPages={isLoadingServerPages}
+          onCreatePage={onCreateServerPage}
+          onSelectPage={loadServerPage}
+        />
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>
