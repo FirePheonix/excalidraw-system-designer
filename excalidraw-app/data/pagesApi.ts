@@ -146,7 +146,6 @@ const uploadFileToS3 = async (file: BinaryFileData) => {
     method: "PUT",
     headers: {
       "Content-Type": file.mimeType || imageBlob.type || "image/png",
-      "x-amz-acl": "public-read",
     },
     body: imageBlob,
   });

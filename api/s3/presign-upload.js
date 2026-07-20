@@ -47,7 +47,6 @@ module.exports = async (req, res) => {
       Bucket: bucket,
       Key: key,
       ContentType: String(contentType),
-      ACL: "public-read",
     });
 
     const uploadUrl = await getSignedUrl(getS3Client(), command, {
