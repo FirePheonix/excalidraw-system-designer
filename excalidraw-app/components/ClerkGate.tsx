@@ -121,7 +121,14 @@ export const ClerkGate = ({ children }: PropsWithChildren) => {
   return (
     <div style={{ padding: 24 }}>
       <p>Sign in to continue.</p>
-      <button type="button" onClick={() => state.clerk.openSignIn()}>
+      <button
+        type="button"
+        onClick={() =>
+          void state.clerk.redirectToSignIn({
+            redirectUrl: window.location.href,
+          })
+        }
+      >
         Sign in with Clerk
       </button>
     </div>
