@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { ensureSchema, pool } = require("../_db");
+const { requireAuthorizedUser } = require("../_auth");
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 200;
@@ -11,6 +12,10 @@ const toInt = (value, fallback) => {
 
 module.exports = async (req, res) => {
   try {
+    if (!(await requireAuthorizedUser(req, res))) {
+      return;
+    }
+
     await ensureSchema();
 
     if (req.method === "GET") {

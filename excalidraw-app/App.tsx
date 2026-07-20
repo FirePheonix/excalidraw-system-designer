@@ -42,6 +42,8 @@ import {
   XBrandIcon,
   DiscordIcon,
   ExcalLogo,
+  FreedrawIcon,
+  TrashIcon,
   usersIcon,
   exportToPlus,
   share,
@@ -753,6 +755,7 @@ const ExcalidrawWrapper = () => {
   >("idle");
   const [serverPages, setServerPages] = useState<ServerPageSummary[]>([]);
   const [isLoadingServerPages, setIsLoadingServerPages] = useState(false);
+  const [isServerPagesDialogOpen, setIsServerPagesDialogOpen] = useState(false);
   const [isInstallingSystemLibraries, setIsInstallingSystemLibraries] =
     useState(false);
 
@@ -829,7 +832,7 @@ const ExcalidrawWrapper = () => {
         await saveServerPage({
           id: pageId,
           title: pageTitle,
-          scene: captureScene(excalidrawAPI),
+          scene: await captureScene(excalidrawAPI),
         });
         await refreshServerPages();
         setServerSaveState("saved");
@@ -917,7 +920,7 @@ const ExcalidrawWrapper = () => {
       await saveServerPage({
         id: serverPageId,
         title: nextTitle.trim(),
-        scene: captureScene(excalidrawAPI),
+        scene: await captureScene(excalidrawAPI),
       });
       setServerPageTitle(nextTitle.trim());
       await refreshServerPages();
@@ -967,45 +970,92 @@ const ExcalidrawWrapper = () => {
 
   const onOpenServerPage = useCallback(async () => {
     try {
-      const pages = await listServerPages(200);
-      setServerPages(pages);
-      if (!pages.length) {
-        excalidrawAPI?.setToast({ message: "No saved pages yet" });
-        return;
-      }
-
-      const pageOptions = pages
-        .slice(0, 20)
-        .map((page, index) => `${index + 1}. ${page.title}`)
-        .join("\n");
-      const selected = window.prompt(
-        `Open which server page? Enter a number:\n\n${pageOptions}`,
-        "1",
-      );
-      if (selected === null) {
-        return;
-      }
-
-      const selectedIndex = Number.parseInt(selected, 10) - 1;
-      if (Number.isNaN(selectedIndex) || selectedIndex < 0) {
-        excalidrawAPI?.setToast({ message: "Invalid page selection" });
-        return;
-      }
-
-      const pageToOpen = pages[selectedIndex];
-      if (!pageToOpen) {
-        excalidrawAPI?.setToast({ message: "Page selection out of range" });
-        return;
-      }
-
-      await loadServerPage(pageToOpen.id);
-      setServerSaveState("idle");
+      setIsServerPagesDialogOpen(true);
+      await refreshServerPages();
     } catch (error) {
       console.error(error);
       setServerSaveState("error");
-      excalidrawAPI?.setToast({ message: "Failed to open pages" });
+      excalidrawAPI?.setToast({ message: "Failed to load page list" });
     }
-  }, [excalidrawAPI, loadServerPage]);
+  }, [excalidrawAPI, refreshServerPages]);
+
+  const onOpenServerPageById = useCallback(
+    async (pageId: string) => {
+      try {
+        await loadServerPage(pageId);
+        setServerSaveState("idle");
+        setIsServerPagesDialogOpen(false);
+      } catch (error) {
+        console.error(error);
+        setServerSaveState("error");
+        excalidrawAPI?.setToast({ message: "Failed to open page" });
+      }
+    },
+    [excalidrawAPI, loadServerPage],
+  );
+
+  const onRenameServerPageById = useCallback(
+    async (page: ServerPageSummary) => {
+      const nextTitle = window.prompt("Rename server page", page.title);
+      if (!nextTitle || !nextTitle.trim()) {
+        return;
+      }
+
+      try {
+        const fullPage = await getServerPage(page.id);
+        await saveServerPage({
+          id: page.id,
+          title: nextTitle.trim(),
+          scene: fullPage.scene_json,
+        });
+        if (serverPageId === page.id) {
+          setServerPageTitle(nextTitle.trim());
+        }
+        await refreshServerPages();
+        excalidrawAPI?.setToast({ message: "Page renamed" });
+      } catch (error) {
+        console.error(error);
+        excalidrawAPI?.setToast({ message: "Rename failed" });
+      }
+    },
+    [excalidrawAPI, refreshServerPages, serverPageId],
+  );
+
+  const onDeleteServerPageById = useCallback(
+    async (page: ServerPageSummary) => {
+      const confirmed = window.confirm(
+        `Delete server page "${page.title}"? This cannot be undone.`,
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        await deleteServerPage(page.id);
+        if (serverPageId === page.id) {
+          setServerPageId(null);
+          setServerPageTitle("Untitled Page");
+          setServerSaveState("idle");
+          if (excalidrawAPI) {
+            excalidrawAPI.updateScene({
+              elements: [],
+              appState: restoreAppState(
+                { ...getDefaultAppState(), name: "Untitled Page" },
+                excalidrawAPI.getAppState(),
+              ),
+              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+            });
+          }
+        }
+        await refreshServerPages();
+        excalidrawAPI?.setToast({ message: "Page deleted" });
+      } catch (error) {
+        console.error(error);
+        excalidrawAPI?.setToast({ message: "Delete failed" });
+      }
+    },
+    [excalidrawAPI, refreshServerPages, serverPageId],
+  );
 
   useEffect(() => {
     refreshServerPages();
@@ -1359,6 +1409,68 @@ const ExcalidrawWrapper = () => {
                   : "Not saved"}
           </div>
         </div>
+        {isServerPagesDialogOpen && (
+          <div
+            className="server-pages-dialog__backdrop"
+            onClick={() => setIsServerPagesDialogOpen(false)}
+          >
+            <div
+              className="server-pages-dialog"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="server-pages-dialog__header">
+                <strong>Server Pages</strong>
+                <button
+                  type="button"
+                  className="server-pages-dialog__close"
+                  onClick={() => setIsServerPagesDialogOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              {isLoadingServerPages ? (
+                <div className="server-pages-dialog__empty">Loading...</div>
+              ) : serverPages.length ? (
+                <div className="server-pages-dialog__list">
+                  {serverPages.map((page) => (
+                    <div key={page.id} className="server-pages-dialog__row">
+                      <button
+                        type="button"
+                        className="server-pages-dialog__open"
+                        onClick={() => void onOpenServerPageById(page.id)}
+                        title={`Open ${page.title}`}
+                      >
+                        {page.title}
+                      </button>
+                      <div className="server-pages-dialog__actions">
+                        <button
+                          type="button"
+                          className="server-pages-dialog__icon-btn"
+                          onClick={() => void onRenameServerPageById(page)}
+                          title={`Edit name: ${page.title}`}
+                        >
+                          {FreedrawIcon}
+                        </button>
+                        <button
+                          type="button"
+                          className="server-pages-dialog__icon-btn server-pages-dialog__icon-btn--danger"
+                          onClick={() => void onDeleteServerPageById(page)}
+                          title={`Delete ${page.title}`}
+                        >
+                          {TrashIcon}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="server-pages-dialog__empty">
+                  No saved pages yet.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {excalidrawAPI && <AIComponents excalidrawAPI={excalidrawAPI} />}
 
         <TTDDialogTrigger />

@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const { PutObjectCommand } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { getBucketConfig, getS3Client } = require("../_s3");
+const { requireAuthorizedUser } = require("../_auth");
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
@@ -17,6 +18,10 @@ module.exports = async (req, res) => {
   }
 
   try {
+    if (!(await requireAuthorizedUser(req, res))) {
+      return;
+    }
+
     const { fileName, contentType, contentLength } = req.body || {};
 
     if (!contentType || !String(contentType).startsWith("image/")) {

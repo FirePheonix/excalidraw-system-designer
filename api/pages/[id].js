@@ -1,4 +1,5 @@
 const { ensureSchema, pool } = require("../_db");
+const { requireAuthorizedUser } = require("../_auth");
 
 const isValidScene = (scene) => {
   return (
@@ -17,6 +18,10 @@ module.exports = async (req, res) => {
   }
 
   try {
+    if (!(await requireAuthorizedUser(req, res))) {
+      return;
+    }
+
     await ensureSchema();
 
     if (req.method === "GET") {
