@@ -1518,6 +1518,8 @@ const ExcalidrawWrapper = () => {
           isLoadingPages={isLoadingServerPages}
           onCreatePage={onCreateServerPage}
           onSelectPage={loadServerPage}
+          onRenamePage={onRenameServerPageById}
+          onDeletePage={onDeleteServerPageById}
           onInstallSystemLibraries={onInstallSystemLibraries}
           isInstallingSystemLibraries={isInstallingSystemLibraries}
         />

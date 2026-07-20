@@ -1,8 +1,10 @@
 import { DefaultSidebar, Sidebar, THEME } from "@excalidraw/excalidraw";
 import {
+  FreedrawIcon,
   PlusIcon,
   messageCircleIcon,
   presentationIcon,
+  TrashIcon,
 } from "@excalidraw/excalidraw/components/icons";
 import { LinkButton } from "@excalidraw/excalidraw/components/LinkButton";
 import { useUIAppState } from "@excalidraw/excalidraw/context/ui-appState";
@@ -41,6 +43,8 @@ export const AppSidebar = ({
   isLoadingPages,
   onCreatePage,
   onSelectPage,
+  onRenamePage,
+  onDeletePage,
   onInstallSystemLibraries,
   isInstallingSystemLibraries,
 }: {
@@ -49,6 +53,8 @@ export const AppSidebar = ({
   isLoadingPages: boolean;
   onCreatePage: () => void;
   onSelectPage: (pageId: string) => void;
+  onRenamePage: (page: ServerPageSummary) => void;
+  onDeletePage: (page: ServerPageSummary) => void;
   onInstallSystemLibraries: () => void;
   isInstallingSystemLibraries: boolean;
 }) => {
@@ -76,7 +82,7 @@ export const AppSidebar = ({
           {presentationIcon}
         </Sidebar.TabTrigger>
       </DefaultSidebar.TabTriggers>
-      <Sidebar.Tab tab="pages" className="px-2">
+      <Sidebar.Tab tab="pages" className="px-2 app-sidebar-pages-tab">
         <div className="app-sidebar-pages-shell">
           <div className="app-sidebar-pages-header">
             <div className="app-sidebar-pages-title-wrap">
@@ -116,21 +122,43 @@ export const AppSidebar = ({
           )}
           {!isLoadingPages &&
             pages.map((page) => (
-              <button
+              <div
                 key={page.id}
-                type="button"
                 className="app-sidebar-page-item"
                 data-active={currentPageId === page.id ? "true" : "false"}
-                onClick={() => onSelectPage(page.id)}
-                title={page.title}
               >
-                <span className="app-sidebar-page-item__title">
-                  {page.title || "Untitled page"}
-                </span>
-                <span className="app-sidebar-page-item__meta">
-                  {formatPageUpdatedLabel(page.updated_at)}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  className="app-sidebar-page-item__open"
+                  onClick={() => onSelectPage(page.id)}
+                  title={page.title}
+                >
+                  <span className="app-sidebar-page-item__title">
+                    {page.title || "Untitled page"}
+                  </span>
+                  <span className="app-sidebar-page-item__meta">
+                    {formatPageUpdatedLabel(page.updated_at)}
+                  </span>
+                </button>
+                <div className="app-sidebar-page-item__actions">
+                  <button
+                    type="button"
+                    className="app-sidebar-page-item__icon-btn"
+                    onClick={() => onRenamePage(page)}
+                    title={`Rename ${page.title}`}
+                  >
+                    {FreedrawIcon}
+                  </button>
+                  <button
+                    type="button"
+                    className="app-sidebar-page-item__icon-btn app-sidebar-page-item__icon-btn--danger"
+                    onClick={() => onDeletePage(page)}
+                    title={`Delete ${page.title}`}
+                  >
+                    {TrashIcon}
+                  </button>
+                </div>
+              </div>
             ))}
         </div>
       </Sidebar.Tab>
